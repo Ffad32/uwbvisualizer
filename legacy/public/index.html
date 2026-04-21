@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UWB Position Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #0d0d1a;
+            color: #e0e0e0;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            outline: none;
+        }
+
+        /* HUD overlay */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(26, 26, 46, 0.85);
+            border: 1px solid #4fc3f7;
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 300px;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+        }
+
+        .hud-title {
+            color: #4fc3f7;
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #4fc3f7;
+            padding-bottom: 5px;
+        }
+
+        .hud-section-title {
+            color: #4fc3f7;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-top: 10px;
+            margin-bottom: 4px;
+            border-top: 1px solid rgba(79, 195, 247, 0.3);
+            padding-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .hud-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .hud-label {
+            font-weight: 600;
+            color: #aaa;
+        }
+
+        .hud-value {
+            font-weight: 700;
+            color: #fff;
+        }
+
+        #battery {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .battery-green {
+            background-color: rgba(76, 175, 80, 0.3);
+            color: #4caf50;
+        }
+
+        .battery-orange {
+            background-color: rgba(255, 152, 0, 0.3);
+            color: #ff9800;
+        }
+
+        .battery-red {
+            background-color: rgba(244, 67, 54, 0.3);
+            color: #f44336;
+        }
+
+        /* Anchor config panel */
+        #anchor-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(26, 26, 46, 0.85);
+            border: 1px solid #4fc3f7;
+            border-radius: 10px;
+            padding: 20px;
+            width: 320px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 100;
+            transition: transform 0.3s ease;
+        }
+
+        #anchor-body {
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            cursor: pointer;
+        }
+
+        .panel-title {
+            color: #4fc3f7;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: #4fc3f7;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+
+        .anchor-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .anchor-label {
+            width: 40px;
+            font-weight: bold;
+            color: #ff6b6b;
+        }
+
+        .coord-input {
+            flex: 1;
+            margin: 0 8px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        .coord-input:focus {
+            outline: none;
+            border-color: #4fc3f7;
+        }
+
+        .unit {
+            color: #aaa;
+            font-size: 0.9rem;
+            width: 30px;
+        }
+
+        #apply-anchors {
+            width: 100%;
+            padding: 10px;
+            background: #4fc3f7;
+            color: #0d0d1a;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+
+        #apply-anchors:hover {
+            background: #29b6f6;
+        }
+
+        #apply-anchors:active {
+            background: #0288d1;
+        }
+
+        /* Connection status */
+        #connection-status {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(26, 26, 46, 0.9);
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .status-connected {
+            background-color: #4caf50;
+            box-shadow: 0 0 8px #4caf50;
+        }
+
+        .status-disconnected {
+            background-color: #f44336;
+            box-shadow: 0 0 8px #f44336;
+        }
+
+        /* Instructions */
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(26, 26, 46, 0.7);
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 0.8rem;
+            color: #aaa;
+            max-width: 300px;
+            z-index: 100;
+        }
+
+        /* Hidden class for collapsing */
+        .hidden {
+            /* panel stays in place, body hidden via separate rule */
+        }
+        
+        #anchor-panel.hidden #anchor-body {
+            display: none;
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="scene-canvas"></canvas>
+
+        <!-- HUD -->
+        <div id="hud">
+            <div class="hud-title">UWB Tag Status</div>
+            <div class="hud-row">
+                <span class="hud-label">Chip ID:</span>
+                <span class="hud-value" id="chip-id">—</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Battery:</span>
+                <span class="hud-value" id="battery">—</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Position (X, Y):</span>
+                <span class="hud-value" id="position">—</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Distance A1:</span>
+                <span class="hud-value" id="dist-a1">—</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Distance A2:</span>
+                <span class="hud-value" id="dist-a2">—</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Distance A3:</span>
+                <span class="hud-value" id="dist-a3">—</span>
+            </div>
+            <div class="hud-section-title">Anchor Batteries</div>
+            <div class="hud-row">
+                <span class="hud-label">A1 Battery:</span>
+                <span class="hud-value" id="anchor-bat-1">—</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">A2 Battery:</span>
+                <span class="hud-value" id="anchor-bat-2">—</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">A3 Battery:</span>
+                <span class="hud-value" id="anchor-bat-3">—</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">Last Update:</span>
+                <span class="hud-value" id="last-update">—</span>
+            </div>
+        </div>
+
+        <!-- Anchor Config Panel -->
+        <div id="anchor-panel">
+            <div class="panel-header" id="panel-toggle">
+                <div class="panel-title">Anchor Configuration</div>
+                <button class="toggle-btn" id="toggle-btn">−</button>
+            </div>
+            <div id="anchor-body">
+                <div class="anchor-row">
+                    <div class="anchor-label">A1</div>
+                    <input type="number" step="0.01" class="coord-input" id="a1-x" placeholder="X">
+                    <span class="unit">m</span>
+                    <input type="number" step="0.01" class="coord-input" id="a1-y" placeholder="Y">
+                    <span class="unit">m</span>
+                </div>
+                <div class="anchor-row">
+                    <div class="anchor-label">A2</div>
+                    <input type="number" step="0.01" class="coord-input" id="a2-x" placeholder="X">
+                    <span class="unit">m</span>
+                    <input type="number" step="0.01" class="coord-input" id="a2-y" placeholder="Y">
+                    <span class="unit">m</span>
+                </div>
+                <div class="anchor-row">
+                    <div class="anchor-label">A3</div>
+                    <input type="number" step="0.01" class="coord-input" id="a3-x" placeholder="X">
+                    <span class="unit">m</span>
+                    <input type="number" step="0.01" class="coord-input" id="a3-y" placeholder="Y">
+                    <span class="unit">m</span>
+                </div>
+                <button id="apply-anchors">Apply Anchor Positions</button>
+            </div>
+        </div>
+
+        <!-- Connection Status -->
+        <div id="connection-status">
+            <div class="status-dot status-connected" id="status-dot"></div>
+            <span id="status-text">Connected</span>
+        </div>
+
+        <!-- Instructions -->
+        <div id="instructions">
+            <strong>Controls:</strong> Left drag = rotate, Right drag = pan, Scroll = zoom.<br>
+            Anchor positions can be updated via the panel.
+        </div>
+    </div>
+
+    <!-- Three.js and our main script -->
+    <script type="module" src="main.js"></script>
+</body>
+</html>
